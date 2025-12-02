@@ -1,4 +1,4 @@
-// server.js (ESM) - FINAL WITH NOTIFICATION SUPPORT
+// server.js (ESM) - RENDER DEPLOYMENT FIX
 import app from './src/app.js';
 import connectDB from './src/config/db.js';
 import dotenv from 'dotenv';
@@ -6,15 +6,11 @@ import http from 'http';
 import { Server } from 'socket.io';
 import { socketAuthMiddleware, initializeSocketHandlers } from './src/socket/socketHandler.js';
 
-// Load environment variables from .env file
+// Load environment variables
 dotenv.config(); 
 
 // Connect Database
 connectDB();
-
-// ----------------------------------------------------
-// SOCKET.IO INTEGRATION
-// ----------------------------------------------------
 
 // 1. Create HTTP server from the Express app
 const server = http.createServer(app);
@@ -22,32 +18,27 @@ const server = http.createServer(app);
 // 2. Configure Socket.io server
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL || 'http://localhost:5173', // Must match frontend URL
+        origin: process.env.FRONTEND_URL || 'http://localhost:5173', 
         methods: ["GET", "POST"],
         credentials: true
     }
 });
 
-// --- CRITICAL NEW LINE FOR NOTIFICATIONS ---
-// This allows your API Controllers (req.app.get('io')) to send real-time alerts
+// Share IO instance with the Express App (For Notifications)
 app.set('io', io); 
-// -------------------------------------------
 
-// 3. Apply Authentication Middleware to Sockets
-// io.use(socketAuthMiddleware); 
-
-// 4. Initialize Socket Event Listeners (Chat logic)
+// 3. Initialize Socket Event Listeners
 initializeSocketHandlers(io);
 
 // ----------------------------------------------------
-// SERVER START
+// SERVER START (RENDER FIX)
 // ----------------------------------------------------
 
-// Define port for Render deployment
+// Define port for Render deployment (Render sets this automatically in prod)
 const PORT = process.env.PORT || 8080; 
 
-// Start the combined HTTP/Socket.io server
-server.listen(PORT, () => {
+// IMPORTANT: Bind to '0.0.0.0' so Render can detect the open port
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
     console.log(`Socket.IO listening on port ${PORT}`);
 });
