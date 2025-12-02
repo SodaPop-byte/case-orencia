@@ -1,6 +1,6 @@
-// AdminDashboard.jsx (ESM) - FINAL MERGED (Charts + Quick Actions)
+// AdminDashboard.jsx (ESM) - FINAL FIXED (Smart Add Product Button)
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Needed for buttons
+import { useNavigate } from 'react-router-dom'; 
 import api from '../../utils/api.js';
 import { 
     FaWallet, FaShoppingCart, FaBoxOpen, FaExclamationTriangle, 
@@ -12,13 +12,12 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
-    const navigate = useNavigate();
+    const navigate = useNavigate(); 
     const [stats, setStats] = useState({ revenue: 0, orders: 0, products: 0, lowStock: 0 });
     const [recentOrders, setRecentOrders] = useState([]);
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
 
     const COLORS = ['#6366f1', '#ec4899', '#8b5cf6', '#10b981'];
 
@@ -38,7 +37,7 @@ const AdminDashboard = () => {
                     .filter(o => o.status !== 'CANCELLED')
                     .reduce((acc, curr) => acc + curr.totalPrice, 0);
 
-                // Chart Data Logic
+                // Charts Logic
                 const salesMap = {};
                 allOrders.forEach(order => {
                     if (order.status !== 'CANCELLED') {
@@ -60,7 +59,6 @@ const AdminDashboard = () => {
 
             } catch (err) {
                 console.error("Dashboard Load Error:", err);
-                setError('Failed to load dashboard data.');
             } finally {
                 setIsLoading(false);
             }
@@ -69,7 +67,7 @@ const AdminDashboard = () => {
         fetchDashboardData();
     }, []);
 
-    // UI Components
+    // --- UI Components ---
     const StatCard = ({ title, value, icon: Icon, color, subtext }) => (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-start justify-between hover:shadow-md transition-shadow">
             <div>
@@ -106,7 +104,8 @@ const AdminDashboard = () => {
                         <FaWarehouse className="text-indigo-600" /> Manage Stock
                     </button>
                     <button 
-                        onClick={() => navigate('/admin/products')} 
+                        // FIX: PASS STATE TO AUTO-OPEN MODAL
+                        onClick={() => navigate('/admin/products', { state: { openCreate: true } })} 
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 dark:shadow-none"
                     >
                         <FaPlus /> Add Product
@@ -199,6 +198,12 @@ const AdminDashboard = () => {
                         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <div className="flex items-center gap-3"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div><span className="text-sm font-medium text-blue-700 dark:text-blue-400">Chat Server</span></div>
                             <span className="text-xs text-blue-600">Online</span>
+                        </div>
+                        <hr className="border-gray-100 dark:border-gray-700 my-4" />
+                        <h4 className="text-xs font-bold uppercase text-gray-400 mb-2">Pending Tasks</h4>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                            <FaClock className="text-orange-400" />
+                            <span>Verify {recentOrders.filter(o => o.status === 'PENDING VERIFICATION').length} payments</span>
                         </div>
                     </div>
                 </div>
