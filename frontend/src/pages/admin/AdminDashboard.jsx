@@ -1,10 +1,9 @@
-// AdminDashboard.jsx (ESM) - FINAL FIXED (Smart Add Product Button)
+// AdminDashboard.jsx (ESM) - CLEAN ANALYTICS ONLY (No Buttons)
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; 
 import api from '../../utils/api.js';
 import { 
     FaWallet, FaShoppingCart, FaBoxOpen, FaExclamationTriangle, 
-    FaArrowUp, FaClock, FaPlus, FaWarehouse 
+    FaArrowUp, FaClock 
 } from 'react-icons/fa';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -12,12 +11,12 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
-    const navigate = useNavigate(); 
     const [stats, setStats] = useState({ revenue: 0, orders: 0, products: 0, lowStock: 0 });
     const [recentOrders, setRecentOrders] = useState([]);
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
 
     const COLORS = ['#6366f1', '#ec4899', '#8b5cf6', '#10b981'];
 
@@ -25,11 +24,13 @@ const AdminDashboard = () => {
         const fetchDashboardData = async () => {
             setIsLoading(true);
             try {
+                // 1. Get Inventory
                 const invRes = await api.get('/admin/reports/inventory');
                 const inventory = invRes.data?.data?.stockSummary || [];
                 const activeProducts = invRes.data?.data?.activeProductsCount || 0;
                 const lowStockCount = inventory.filter(i => i.stockLevel < 10).length;
 
+                // 2. Get Orders
                 const ordRes = await api.get('/admin/orders');
                 const allOrders = Array.isArray(ordRes.data?.data) ? ordRes.data.data : [];
                 
@@ -37,7 +38,7 @@ const AdminDashboard = () => {
                     .filter(o => o.status !== 'CANCELLED')
                     .reduce((acc, curr) => acc + curr.totalPrice, 0);
 
-                // Charts Logic
+                // 3. Prepare Chart Data
                 const salesMap = {};
                 allOrders.forEach(order => {
                     if (order.status !== 'CANCELLED') {
@@ -59,6 +60,7 @@ const AdminDashboard = () => {
 
             } catch (err) {
                 console.error("Dashboard Load Error:", err);
+                setError('Failed to load dashboard data.');
             } finally {
                 setIsLoading(false);
             }
@@ -93,24 +95,9 @@ const AdminDashboard = () => {
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
-            {/* Header with Quick Actions */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Header - Clean, No Buttons */}
+            <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
-                <div className="flex gap-3">
-                    <button 
-                        onClick={() => navigate('/admin/inventory')} 
-                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
-                    >
-                        <FaWarehouse className="text-indigo-600" /> Manage Stock
-                    </button>
-                    <button 
-                        // FIX: PASS STATE TO AUTO-OPEN MODAL
-                        onClick={() => navigate('/admin/products', { state: { openCreate: true } })} 
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 dark:shadow-none"
-                    >
-                        <FaPlus /> Add Product
-                    </button>
-                </div>
             </div>
 
             {/* Stats Grid */}
@@ -198,12 +185,6 @@ const AdminDashboard = () => {
                         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                             <div className="flex items-center gap-3"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div><span className="text-sm font-medium text-blue-700 dark:text-blue-400">Chat Server</span></div>
                             <span className="text-xs text-blue-600">Online</span>
-                        </div>
-                        <hr className="border-gray-100 dark:border-gray-700 my-4" />
-                        <h4 className="text-xs font-bold uppercase text-gray-400 mb-2">Pending Tasks</h4>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                            <FaClock className="text-orange-400" />
-                            <span>Verify {recentOrders.filter(o => o.status === 'PENDING VERIFICATION').length} payments</span>
                         </div>
                     </div>
                 </div>
