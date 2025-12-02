@@ -1,0 +1,29 @@
+{
+  "name": "case-orencia-backend",
+  "version": "1.0.0",
+  "description": "MERN backend for E-commerce and Inventory Management, deployed on Render.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cloudinary": "^2.0.0",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "datauri": "^4.1.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.3",
+    "express-mongo-sanitize": "^2.2.0",
+    "helmet": "^7.1.0",
+    "http": "0.0.1-security",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.2.1",
+    "multer": "^1.4.5-lts.1",
+    "nodemon": "^3.1.0",
+    "socket.io": "^4.7.5",
+    "zod": "^3.22.4"
+  }
+}
