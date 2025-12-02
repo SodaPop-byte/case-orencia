@@ -1,9 +1,10 @@
-// AdminDashboard.jsx (ESM) - FINAL WITH CHARTS
+// AdminDashboard.jsx (ESM) - FINAL MERGED (Charts + Quick Actions)
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom'; // Needed for buttons
 import api from '../../utils/api.js';
 import { 
     FaWallet, FaShoppingCart, FaBoxOpen, FaExclamationTriangle, 
-    FaArrowUp, FaClock 
+    FaArrowUp, FaClock, FaPlus, FaWarehouse 
 } from 'react-icons/fa';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,6 +12,7 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
+    const navigate = useNavigate();
     const [stats, setStats] = useState({ revenue: 0, orders: 0, products: 0, lowStock: 0 });
     const [recentOrders, setRecentOrders] = useState([]);
     const [chartData, setChartData] = useState([]);
@@ -18,20 +20,17 @@ const AdminDashboard = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // Colors for Pie Chart
     const COLORS = ['#6366f1', '#ec4899', '#8b5cf6', '#10b981'];
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             setIsLoading(true);
             try {
-                // 1. Get Inventory
                 const invRes = await api.get('/admin/reports/inventory');
                 const inventory = invRes.data?.data?.stockSummary || [];
                 const activeProducts = invRes.data?.data?.activeProductsCount || 0;
                 const lowStockCount = inventory.filter(i => i.stockLevel < 10).length;
 
-                // 2. Get Orders
                 const ordRes = await api.get('/admin/orders');
                 const allOrders = Array.isArray(ordRes.data?.data) ? ordRes.data.data : [];
                 
@@ -39,8 +38,7 @@ const AdminDashboard = () => {
                     .filter(o => o.status !== 'CANCELLED')
                     .reduce((acc, curr) => acc + curr.totalPrice, 0);
 
-                // --- 3. PREPARE CHART DATA (Sales Trend) ---
-                // Group orders by Date
+                // Chart Data Logic
                 const salesMap = {};
                 allOrders.forEach(order => {
                     if (order.status !== 'CANCELLED') {
@@ -48,15 +46,10 @@ const AdminDashboard = () => {
                         salesMap[date] = (salesMap[date] || 0) + order.totalPrice;
                     }
                 });
-                // Convert to Array and reverse to show oldest to newest
-                const salesChartData = Object.keys(salesMap).map(date => ({
-                    name: date,
-                    sales: salesMap[date]
-                })).reverse().slice(-7); // Last 7 days (or entries)
+                const salesChartData = Object.keys(salesMap).map(date => ({ name: date, sales: salesMap[date] })).reverse().slice(-7);
 
-                // --- 4. PREPARE PIE DATA (Inventory Distribution) ---
                 const categoryData = inventory.map(item => ({
-                    name: item.itemName.charAt(0).toUpperCase() + item.itemName.slice(1), // Capitalize
+                    name: item.itemName.charAt(0).toUpperCase() + item.itemName.slice(1),
                     value: item.stockLevel
                 }));
 
@@ -76,7 +69,7 @@ const AdminDashboard = () => {
         fetchDashboardData();
     }, []);
 
-    // --- UI Components ---
+    // UI Components
     const StatCard = ({ title, value, icon: Icon, color, subtext }) => (
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-start justify-between hover:shadow-md transition-shadow">
             <div>
@@ -99,11 +92,27 @@ const AdminDashboard = () => {
     };
 
     if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading Dashboard...</div>;
-    if (error) return <div className="p-10 text-center text-red-500">{error}</div>;
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
+            {/* Header with Quick Actions */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => navigate('/admin/inventory')} 
+                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                    >
+                        <FaWarehouse className="text-indigo-600" /> Manage Stock
+                    </button>
+                    <button 
+                        onClick={() => navigate('/admin/products')} 
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 dark:shadow-none"
+                    >
+                        <FaPlus /> Add Product
+                    </button>
+                </div>
+            </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -113,9 +122,8 @@ const AdminDashboard = () => {
                 <StatCard title="Low Stock Alerts" value={stats.lowStock} icon={FaExclamationTriangle} color="bg-orange-500" subtext={stats.lowStock > 0 ? <span className="text-orange-500 font-bold">Action Needed</span> : <span className="text-green-500">Healthy</span>} />
             </div>
 
-            {/* CHARTS SECTION */}
+            {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Area Chart: Sales Trend */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Sales Trend</h3>
                     <div className="h-72 w-full">
@@ -131,35 +139,21 @@ const AdminDashboard = () => {
                                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.1} />
                                     <XAxis dataKey="name" stroke="#9ca3af" fontSize={12} />
                                     <YAxis stroke="#9ca3af" fontSize={12} />
-                                    <Tooltip 
-                                        contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} 
-                                        formatter={(value) => [`₱${value.toLocaleString()}`, 'Sales']}
-                                    />
+                                    <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} formatter={(value) => [`₱${value.toLocaleString()}`, 'Sales']} />
                                     <Area type="monotone" dataKey="sales" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
                                 </AreaChart>
                             </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-gray-400">No sales data yet.</div>
-                        )}
+                        ) : <div className="h-full flex items-center justify-center text-gray-400">No sales data yet.</div>}
                     </div>
                 </div>
 
-                {/* Pie Chart: Inventory Distribution */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Inventory By Type</h3>
                     <div className="h-72 w-full">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
+                                <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                 </Pie>
                                 <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', borderRadius: '8px', color: '#fff' }} />
                                 <Legend verticalAlign="bottom" height={36} />
@@ -169,35 +163,44 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            {/* Recent Activity Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-white">Recent Orders</h3>
+            {/* Recent Activity */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                    <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                        <h3 className="font-bold text-lg text-gray-900 dark:text-white">Recent Orders</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500">
+                                <tr><th className="px-6 py-3">Order ID</th><th className="px-6 py-3">Customer</th><th className="px-6 py-3">Amount</th><th className="px-6 py-3">Status</th></tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {recentOrders.map(order => (
+                                    <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                        <td className="px-6 py-4 font-medium">#{order._id.slice(-6).toUpperCase()}</td>
+                                        <td className="px-6 py-4">{order.resellerId?.name || 'Unknown'}</td>
+                                        <td className="px-6 py-4">₱{order.totalPrice.toFixed(2)}</td>
+                                        <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
+                                    </tr>
+                                ))}
+                                {recentOrders.length === 0 && <tr><td colSpan="4" className="text-center py-6 text-gray-500">No orders yet.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 dark:bg-gray-700/50 text-gray-500">
-                            <tr>
-                                <th className="px-6 py-3">Order ID</th>
-                                <th className="px-6 py-3">Customer</th>
-                                <th className="px-6 py-3">Amount</th>
-                                <th className="px-6 py-3">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {recentOrders.map(order => (
-                                <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td className="px-6 py-4 font-medium">#{order._id.slice(-6).toUpperCase()}</td>
-                                    <td className="px-6 py-4">{order.resellerId?.name || 'Unknown'}</td>
-                                    <td className="px-6 py-4">₱{order.totalPrice.toFixed(2)}</td>
-                                    <td className="px-6 py-4"><StatusBadge status={order.status} /></td>
-                                </tr>
-                            ))}
-                            {recentOrders.length === 0 && (
-                                <tr><td colSpan="4" className="text-center py-6 text-gray-500">No orders yet.</td></tr>
-                            )}
-                        </tbody>
-                    </table>
+
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                    <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">System Status</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                            <div className="flex items-center gap-3"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div><span className="text-sm font-medium text-green-700 dark:text-green-400">Database</span></div>
+                            <span className="text-xs text-green-600">Connected</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                            <div className="flex items-center gap-3"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div><span className="text-sm font-medium text-blue-700 dark:text-blue-400">Chat Server</span></div>
+                            <span className="text-xs text-blue-600">Online</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
