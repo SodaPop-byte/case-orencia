@@ -1,10 +1,9 @@
-// admin.routes.js (ESM) - FINAL FIXED IMPORTS
+// admin.routes.js (ESM) - FINAL FIXED ROUTES
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { multerUpload, uploadMultipleImages } from '../middleware/upload.middleware.js';
 
-// --- 1. PRODUCT CONTROLLER IMPORTS ---
-// Only Product CRUD functions come from here
+// 1. PRODUCT CONTROLLER
 import { 
     createProductController, 
     updateProductController, 
@@ -13,17 +12,17 @@ import {
     getProductByIdController
 } from '../controllers/product.controller.js'; 
 
-// --- 2. ADMIN CONTROLLER IMPORTS ---
-// Order, Report, and User functions come from here
+// 2. ADMIN CONTROLLER (Order, Report, and User creation/details functions)
 import { 
     getAllOrders, 
     updateOrderStatusController, 
     getSalesReport, 
     getInventoryReport, 
-    getUserDetails 
-} from '../controllers/admin.controller.js'; // <--- THIS MUST POINT TO ADMIN.CONTROLLER
+    getUserDetails,
+    createAdminUserController // <--- CRITICAL IMPORT
+} from '../controllers/admin.controller.js'; 
 
-// --- 3. INVENTORY CONTROLLER IMPORTS ---
+// 3. INVENTORY CONTROLLER
 import { 
     getInventory, 
     adjustStock, 
@@ -59,6 +58,9 @@ router.get('/orders', getAllOrders);
 router.patch('/orders/:id', updateOrderStatusController);
 router.get('/reports/sales', getSalesReport); 
 router.get('/reports/inventory', getInventoryReport); 
-router.get('/users/:id', getUserDetails);
+
+// --- NEW USER MANAGEMENT ROUTES ---
+router.post('/users', createAdminUserController); // <--- FIX: POST route for user creation
+router.get('/users/:id', getUserDetails); 
 
 export default router;

@@ -1,8 +1,9 @@
-// admin.controller.js (ESM) - FINAL PRODUCTION CLEAN
+// admin.controller.js (ESM) - FINAL ROBUST ERROR HANDLING
 import * as orderService from '../services/order.service.js';
 import * as reportService from '../services/report.service.js';
 import Order from '../models/order.model.js';
 import User from '../models/user.model.js'; 
+import * as authService from '../services/auth.service.js';
 import { z } from 'zod';
 
 const STATUS_OPTIONS = [
@@ -22,6 +23,37 @@ const UpdateStatusSchema = z.object({
     message: "Tracking number is required when moving status to SHIPPED.",
     path: ['trackingNumber'],
 });
+
+const AdminCreateUserSchema = z.object({
+    name: z.string().min(3),
+    email: z.string().email(),
+    password: z.string().min(8),
+    role: z.enum(['admin', 'reseller', 'staff']),
+});
+
+// ... (Functions GetAllOrders, UpdateOrderStatusController, etc. remain the same) ...
+
+// 3. Admin Create User (WITH ROBUST ERROR CATCH)
+export const createAdminUserController = async (req, res) => {
+    try {
+        const validatedData = AdminCreateUserSchema.parse(req.body);
+        const newUser = await authService.registerUser(validatedData); 
+
+        res.status(201).json({ success: true, message: `User ${validatedData.role} created.`, data: newUser });
+    } catch (error) {
+        // --- FIX: Expose Mongoose Validation Errors ---
+        if (error.name === 'ValidationError') {
+            const errors = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({ success: false, message: 'Database Validation Failed.', details: errors });
+        }
+        // FIX: Check for Duplicate Key Error (email)
+        if (error.code === 11000) return res.status(400).json({ success: false, message: 'User with this email already exists.' });
+        
+        // Final fallback (sends the original error message if not a known database issue)
+        res.status(400).json({ success: false, message: error.message || 'User creation failed.' });
+    }
+};
+// ... (Rest of exports remain the same) ...
 
 // 1. Get All Orders
 export const getAllOrders = async (req, res) => {
