@@ -1,4 +1,4 @@
-// ChatRoom.jsx (ESM) - FIX DUPLICATE MESSAGES
+// ChatRoom.jsx (ESM) - FINAL FIX: LIVE RECEIVING & MESSAGE IDENTITY
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth.js';
 import { useSocket } from '../../hooks/useSocket.js';
@@ -19,32 +19,28 @@ const ChatRoom = ({ roomId, otherUser, closeChat }) => {
         const fetchHistory = async () => {
             try {
                 const response = await api.get(`/chat/messages/${roomId}?limit=50`);
-                // Ensure no duplicates from history loading
                 setMessages(response.data.data);
+                if (isConnected) emit('mark-seen', { roomId }); 
             } catch (err) {
                 console.error("Error fetching chat history:", err);
             }
         };
 
         if (roomId) {
-            setMessages([]); // Clear previous messages when switching rooms
+            setMessages([]);
             fetchHistory();
-            if (isConnected) emit('mark-seen', { roomId });
         }
-    }, [roomId, isConnected]);
+    }, [roomId, isConnected]); // Added isConnected to force refresh history on reconnect
 
-    // --- 2. Socket Listeners ---
+    // --- 2. Socket Listeners (CRITICAL for live receiving) ---
     useEffect(() => {
         const handleNewMessage = (message) => {
-            // Only add if it belongs to this room
             if (message.chatRoomId === roomId) {
                 setMessages(prev => {
-                    // Safety check: Prevent duplicates if message ID already exists
                     if (prev.some(m => m._id === message._id)) return prev;
                     return [...prev, message];
                 });
                 
-                // If the message is from the other person, mark it as seen
                 if (message.senderId !== user.id) {
                     emit('mark-seen', { roomId });
                 }
@@ -57,53 +53,45 @@ const ChatRoom = ({ roomId, otherUser, closeChat }) => {
             }
         };
 
+        // Attach listeners
         on('new-message', handleNewMessage);
         on('typing', handleTyping);
 
+        // Clean up listeners when component unmounts or dependencies change
         return () => {
             off('new-message', handleNewMessage);
             off('typing', handleTyping);
         };
-    }, [roomId, otherUser._id, user.id, on, off, emit]);
+    // CRITICAL FIX: The dependency array must include all values used in the handler and emitted
+    }, [roomId, otherUser._id, user.id, on, off, emit, isConnected]); 
     
     // Auto-scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isTyping]);
 
-    // --- 3. Send Message Logic (Updated) ---
+    // --- 3. Send Message Logic ---
     const handleSendMessage = (e) => {
         e.preventDefault();
         if (!input.trim() || !isConnected) return;
         
-        const messageContent = input.trim();
-        
-        // Emit to server
         emit('send-message', { 
             roomId, 
-            content: messageContent, 
+            content: input.trim(), 
             receiverId: otherUser._id 
         });
         
-        // Stop typing indicator
         emit('typing', { roomId, isTyping: false });
-
-        // REMOVED: setMessages([...]) <--- This was causing the duplicate!
-        // We now wait for the server to echo the message back via 'new-message' listener above.
-
         setInput('');
     };
 
-    // --- Typing Handler ---
     const handleInputChange = (e) => {
         setInput(e.target.value);
         if (e.target.value.length > 0) emit('typing', { roomId, isTyping: true });
-        // Debounce logic can be added here
     };
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-gray-800 font-sans">
-            {/* Header */}
             <header className="flex items-center justify-between p-4 border-b dark:border-gray-700 shadow-sm bg-gray-50 dark:bg-gray-700">
                 <div className="flex items-center gap-3">
                     <div className="relative">
@@ -129,7 +117,8 @@ const ChatRoom = ({ roomId, otherUser, closeChat }) => {
             {/* Message List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 dark:bg-gray-900/50">
                 {messages.map((msg) => {
-                    const isMine = msg.senderId === user.id;
+                    // FIX: Use toString() for safe comparison between ObjectId and String ID
+                    const isMine = msg.senderId.toString() === user.id.toString(); 
                     return (
                         <div key={msg._id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm shadow-sm ${

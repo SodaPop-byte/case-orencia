@@ -1,66 +1,77 @@
-// admin.routes.js (ESM) - FINAL FIXED ROUTES
+// src/routes/admin.routes.js
 import { Router } from 'express';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { multerUpload, uploadMultipleImages } from '../middleware/upload.middleware.js';
 
-// 1. PRODUCT CONTROLLER
+// Import Controller Functions
 import { 
-    createProductController, 
-    updateProductController, 
-    deleteProductController, 
-    getProductsController,
-    getProductByIdController
+    createProduct, 
+    updateProduct, 
+    deleteProduct, 
+    getProducts,
+    getProductById
 } from '../controllers/product.controller.js'; 
 
-// 2. ADMIN CONTROLLER (Order, Report, and User creation/details functions)
 import { 
     getAllOrders, 
     updateOrderStatusController, 
     getSalesReport, 
     getInventoryReport, 
     getUserDetails,
-    createAdminUserController // <--- CRITICAL IMPORT
+    createAdminUserController 
 } from '../controllers/admin.controller.js'; 
 
-// 3. INVENTORY CONTROLLER
 import { 
     getInventory, 
     adjustStock, 
     getLowStock 
 } from '../controllers/inventory.controller.js';
 
-
 const router = Router();
-
-// Middleware applied to ALL Admin routes
 router.use(authenticateToken);
 router.use(requireRole(['admin']));
 
-// ---------------------------------------------------------------------
-// PRODUCT MANAGEMENT 
-// ---------------------------------------------------------------------
-router.post('/products', multerUpload.array('images', 5), uploadMultipleImages, createProductController);
-router.get('/products', getProductsController); 
-router.put('/products/:id', updateProductController); 
-router.delete('/products/:id', deleteProductController);
+// --- PRODUCT ROUTES ---
 
-// ---------------------------------------------------------------------
-// INVENTORY MANAGEMENT 
-// ---------------------------------------------------------------------
+// CREATE PRODUCT (With Debugger)
+router.post('/products', 
+    // 1. Parse Files
+    multerUpload.array('images', 5), 
+    
+    // 2. DEBUGGER: Check if files arrived
+    (req, res, next) => {
+        console.log("-----------------------------------------");
+        console.log("1. Route Hit: POST /admin/products");
+        console.log("2. Files Found by Multer:", req.files ? req.files.length : 0);
+        console.log("3. Body Content:", req.body);
+        console.log("-----------------------------------------");
+        next();
+    },
+
+    // 3. Upload to Cloudinary
+    uploadMultipleImages, 
+    
+    // 4. Save to DB
+    createProduct
+);
+
+// READ
+router.get('/products', getProducts); 
+router.get('/products/:id', getProductById);
+
+// UPDATE
+router.put('/products/:id', multerUpload.array('images', 5), uploadMultipleImages, updateProduct); 
+router.delete('/products/:id', deleteProduct);
+
+// --- OTHER ADMIN ROUTES ---
 router.get('/inventory', getInventory);
 router.patch('/inventory/adjust', adjustStock);
 router.get('/inventory/low-stock', getLowStock);
-
-// ---------------------------------------------------------------------
-// ORDER & REPORT MANAGEMENT
-// ---------------------------------------------------------------------
 router.get('/orders', getAllOrders);
 router.patch('/orders/:id', updateOrderStatusController);
 router.get('/reports/sales', getSalesReport); 
 router.get('/reports/inventory', getInventoryReport); 
-
-// --- NEW USER MANAGEMENT ROUTES ---
-router.post('/users', createAdminUserController); // <--- FIX: POST route for user creation
+router.post('/users', createAdminUserController); 
 router.get('/users/:id', getUserDetails); 
 
 export default router;

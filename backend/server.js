@@ -1,4 +1,4 @@
-// server.js (ESM) - RENDER DEPLOYMENT FIX
+// server.js (ESM) - FINAL WORKING VERSION
 import app from './src/app.js';
 import connectDB from './src/config/db.js';
 import dotenv from 'dotenv';
@@ -26,6 +26,11 @@ const io = new Server(server, {
 
 // Share IO instance with the Express App (For Notifications)
 app.set('io', io); 
+
+// --- CRITICAL FIX: ENABLE AUTHENTICATION MIDDLEWARE ---
+// This validates the JWT token before allowing a connection to send messages
+io.use(socketAuthMiddleware); 
+// -----------------------------------------------------
 
 // 3. Initialize Socket Event Listeners
 initializeSocketHandlers(io);

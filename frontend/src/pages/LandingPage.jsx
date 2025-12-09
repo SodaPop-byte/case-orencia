@@ -1,9 +1,14 @@
-// LandingPage.jsx (ESM) - FINAL DEFINITIVE WORKING VERSION
+// LandingPage.jsx (ESM) - CRASH PROOF VERSION
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/api.js';
 import { useAuth } from '../hooks/useAuth.js';
-import { FaArrowRight, FaGem, FaTruck, FaHandshake, FaCheckCircle, FaStar, FaBoxOpen, FaMoneyBillWave, FaUserPlus, FaInstagram, FaFacebookF } from 'react-icons/fa';
+// Removed duplicate optimizeImage import
+import { 
+    FaArrowRight, FaGem, FaTruck, FaHandshake, 
+    FaCheckCircle, FaStar, FaBoxOpen, FaMoneyBillWave, 
+    FaUserPlus, FaInstagram, FaFacebookF 
+} from 'react-icons/fa';
 
 const LandingPage = () => {
     const navigate = useNavigate();
@@ -45,10 +50,12 @@ const LandingPage = () => {
     }, [scrolled]);
 
 
-    // --- HELPER COMPONENTS (DEFINED BEFORE RETURN) ---
+    // --- HELPER COMPONENTS ---
 
     const LandingProductCard = ({ product }) => {
-        const price = product.discountPrice > 0 ? product.discountPrice : product.basePrice;
+        // --- THE FIX IS HERE --- 
+        // We add "|| 0" so if basePrice is missing, it becomes 0 instead of undefined
+        const price = (product.discountPrice > 0 ? product.discountPrice : product.basePrice) || 0;
         
         const handleAtcClick = (e) => {
             e.preventDefault();
@@ -59,22 +66,23 @@ const LandingPage = () => {
         return (
             <Link to={`/product/${product._id}`} className="group relative rounded-3xl overflow-hidden aspect-[3/4] cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-500 block">
                 <img 
-                    src={product.images[0] || 'https://via.placeholder.com/400'} 
+                    src={product.images?.[0] || 'https://via.placeholder.com/400'} // Added safety check for images array
                     className="w-full h-full object-cover transition duration-700 group-hover:scale-110" 
-                    alt={product.name} 
+                    alt={product.name || 'Product'} 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
                 
                 <div className="absolute bottom-0 left-0 p-8 w-full text-white translate-y-2 group-hover:translate-y-0 transition duration-300">
                     <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 mb-1 block">
-                        {product.inventoryType}
+                        {product.inventoryType || 'Stock'}
                     </span>
                     <h3 className="text-2xl font-bold mb-3 leading-tight group-hover:text-indigo-200 transition">
-                        {product.name}
+                        {product.name || 'Untitled Product'}
                     </h3>
                     
                     <div className="flex justify-between items-center pt-2 border-t border-white/20">
-                        <span className="text-lg font-bold text-white">₱{price.toFixed(2)}</span>
+                        {/* --- SAFETY WRAPPER AROUND PRICE --- */}
+                        <span className="text-lg font-bold text-white">₱{Number(price).toFixed(2)}</span>
                         
                         <button 
                             onClick={handleAtcClick} 
@@ -122,7 +130,7 @@ const LandingPage = () => {
                 🎉 FREE SHIPPING for new resellers on orders over ₱5,000! <Link to="/register" className="underline hover:text-indigo-200 ml-2">Join Now</Link>
             </div>
 
-            {/* --- NAVBAR (Dynamic Blending) --- */}
+            {/* --- NAVBAR --- */}
             <nav 
                 className={`fixed w-full z-50 transition-all duration-500 ease-in-out border-b ${
                     scrolled 

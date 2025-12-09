@@ -1,4 +1,4 @@
-// ProductsManagement.jsx (ESM) - FINAL VERSION (Auto-Open, Search, Upload Fix)
+// ProductsManagement.jsx (ESM) - FINAL VERSION (Crash Proof + All Features)
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom'; // Required for Dashboard link
 import api from '../../utils/api.js';
@@ -53,9 +53,10 @@ const ProductsManagement = () => {
 
         try {
             const response = await api.get(`/admin/products${query}`); 
-            setProducts(response.data.data);
+            setProducts(response.data.data || []); // Safety check: || []
         } catch (err) {
             if (err.response?.status !== 404) console.error(err);
+            setProducts([]); // Clear products on error
         } finally {
             setIsLoading(false);
         }
@@ -78,11 +79,13 @@ const ProductsManagement = () => {
 
     const handleImageChange = (e) => {
         const files = Array.from(e.target.files);
-        setFormData(prev => ({
-            ...prev,
-            images: files,
-            imagePreviews: files.map(file => URL.createObjectURL(file)),
-        }));
+        if (files.length > 0) {
+            setFormData(prev => ({
+                ...prev,
+                images: files,
+                imagePreviews: files.map(file => URL.createObjectURL(file)),
+            }));
+        }
     };
 
     const handleFormSubmit = async (e) => {
@@ -91,7 +94,11 @@ const ProductsManagement = () => {
         setSuccessMessage('');
         setIsLoading(true);
 
-        if (parseFloat(formData.discountPrice) > parseFloat(formData.basePrice)) {
+        // Validation: Price
+        const base = parseFloat(formData.basePrice) || 0;
+        const discount = parseFloat(formData.discountPrice) || 0;
+
+        if (discount > base) {
             setError("Discount price cannot be higher than the regular price.");
             setIsLoading(false);
             return;
@@ -103,6 +110,8 @@ const ProductsManagement = () => {
                  data.append(key, formData[key]);
             }
         });
+        
+        // Append Images
         if (formData.images) {
             formData.images.forEach(image => {
                 data.append('images', image);
@@ -110,13 +119,13 @@ const ProductsManagement = () => {
         }
         
         try {
+            // FIX: Explicitly set multipart/form-data to ensure images are sent correctly
+            const config = { headers: { 'Content-Type': 'multipart/form-data' } };
+
             if (isEditing) {
-                await api.put(`/admin/products/${currentProductId}`, formData, {
-                    headers: { 'Content-Type': 'application/json' }, 
-                });
+                await api.put(`/admin/products/${currentProductId}`, data, config);
             } else {
-                // FIX: No manual headers for POST (Axios handles boundary)
-                await api.post('/admin/products', data); 
+                await api.post('/admin/products', data, config); 
             }
             
             setSuccessMessage(`Product ${isEditing ? 'updated' : 'created'} successfully!`);
@@ -145,12 +154,12 @@ const ProductsManagement = () => {
         setIsModalOpen(true);
         setFormData({
             ...product,
-            basePrice: product.basePrice.toString(),
+            basePrice: product.basePrice ? product.basePrice.toString() : '',
             discountPrice: product.discountPrice ? product.discountPrice.toString() : '0',
-            stockQuantity: product.stockQuantity.toString(),
-            images: null, 
-            imagePreviews: product.images, 
-            category: product.category._id || product.category 
+            stockQuantity: product.stockQuantity ? product.stockQuantity.toString() : '0',
+            images: null, // Reset file input
+            imagePreviews: product.images || [], // Show existing images
+            category: product.category?._id || product.category || MOCK_CATEGORIES[0]._id
         });
     };
 
@@ -248,20 +257,32 @@ const ProductsManagement = () => {
                                     <tr key={product._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition duration-150">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
-                                                <img className="h-12 w-12 rounded-lg object-cover border border-gray-200 shadow-sm mr-4" src={product.images[0] || 'https://via.placeholder.com/50'} alt="" />
-                                                <div><div className="text-sm font-bold dark:text-white">{product.name}</div><div className="text-xs text-gray-500">{product.SKU}</div></div>
+                                                {/* FIX: Add safety check 'images?.[0]' so it doesn't crash on bad data */}
+                                                <img className="h-12 w-12 rounded-lg object-cover border border-gray-200 shadow-sm mr-4" 
+                                                     src={product.images?.[0] || 'https://via.placeholder.com/50'} 
+                                                     alt="" />
+                                                <div>
+                                                    <div className="text-sm font-bold dark:text-white">{product.name || 'Untitled'}</div>
+                                                    <div className="text-xs text-gray-500">{product.SKU || 'No SKU'}</div>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap"><TypeBadge type={product.inventoryType} /></td>
+                                        
+                                        {/* CRASH PROOF PRICE COLUMN */}
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-gray-900 dark:text-white">₱{product.basePrice.toFixed(2)}</span>
+                                                <span className="text-sm font-bold text-gray-900 dark:text-white">
+                                                    {/* FIX: '|| 0' prevents .toFixed from crashing on undefined */}
+                                                    ₱{(product.basePrice || 0).toFixed(2)}
+                                                </span>
                                                 {product.discountPrice > 0 && <span className="text-xs text-red-500 line-through">Sale: ₱{product.discountPrice}</span>}
                                             </div>
-                                            <div className={`text-xs font-semibold mt-1 ${product.stockQuantity < 10 ? 'text-red-500' : 'text-emerald-600'}`}>
-                                                {product.stockQuantity} in stock
+                                            <div className={`text-xs font-semibold mt-1 ${(product.stockQuantity || 0) < 10 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                {product.stockQuantity || 0} in stock
                                             </div>
                                         </td>
+                                        
                                         <td className="px-6 py-4 whitespace-nowrap"><StatusBadge active={product.isPublished} text={product.isPublished ? 'Published' : 'Draft'} /></td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <button onClick={() => startEdit(product)} className="text-indigo-600 hover:text-indigo-900 dark:hover:text-indigo-400 mr-4 transition"><FaEdit className="w-4 h-4"/></button>
@@ -288,11 +309,11 @@ const ProductsManagement = () => {
                         <form onSubmit={handleFormSubmit} className="space-y-4">
                             {/* Image Upload */}
                             <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl p-6 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-700/30 hover:bg-gray-100 transition relative">
-                                <input type="file" onChange={handleImageChange} multiple accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required={!isEditing && !formData.imagePreviews.length} />
+                                <input type="file" onChange={handleImageChange} multiple accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" required={!isEditing && (!formData.imagePreviews || formData.imagePreviews.length === 0)} />
                                 <FaImage className="text-4xl text-gray-400 mb-2" />
                                 <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Click to upload product images</p>
                                 <p className="text-xs text-gray-400">JPG, PNG up to 5MB</p>
-                                {formData.imagePreviews.length > 0 && (
+                                {formData.imagePreviews && formData.imagePreviews.length > 0 && (
                                     <div className="mt-4 flex gap-2 w-full overflow-x-auto z-20 relative">
                                         {formData.imagePreviews.map((src, i) => <img key={i} src={src} className="w-16 h-16 object-cover rounded border" />)}
                                     </div>
