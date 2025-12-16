@@ -1,9 +1,10 @@
-// Login.jsx (ESM) - FIXED NAVIGATE IMPORT
+// Login.jsx (ESM) - FINAL CORRECTED VERSION
 import React, { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom'; // FIXED IMPORT
+import { Link, Navigate, useNavigate } from 'react-router-dom'; // ⬅️ ADD useNavigate
 import { useAuth } from '../hooks/useAuth.js';
 
 const Login = () => {
+    const navigate = useNavigate(); // ⬅️ INITIALIZE useNavigate hook
     const { login, isAuthenticated, isLoading, user } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -20,17 +21,31 @@ const Login = () => {
 
         const result = await login(email, password);
 
-        if (!result.success) {
+        if (result.success) {
+            // FIX: Use the user object returned from the context (or existing user state)
+            const role = result.user?.role || user?.role; 
+
+            if (role === 'admin') {
+                navigate('/admin/dashboard', { replace: true });
+            } else if (role === 'reseller') {
+                // 🛑 CORRECT DESTINATION 🛑
+                navigate('/reseller/catalog', { replace: true }); 
+            }
+            // If role is undefined, we simply stay on the login page (or let the check below handle it)
+        } else {
             setError(result.message);
         }
     };
 
-    // Redirect logic uses the imported Navigate component
-    if (isAuthenticated && !isLoading) {
+    // -----------------------------------------------------------
+    // Redirection for users already logged in (e.g., page refresh)
+    // -----------------------------------------------------------
+    if (isAuthenticated && !isLoading && user) {
         if (user.role === 'admin') {
             return <Navigate to="/admin/dashboard" replace />;
-        } else {
-            return <Navigate to="/reseller/home" replace />;
+        } else if (user.role === 'reseller') {
+            // 🛑 CORRECT DESTINATION 🛑
+            return <Navigate to="/reseller/catalog" replace />;
         }
     }
 

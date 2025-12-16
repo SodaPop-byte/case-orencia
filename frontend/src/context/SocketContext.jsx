@@ -1,11 +1,12 @@
-// SocketContext.jsx (ESM) - FINAL AUTHENTICATION FIX
+// src/context/SocketContext.jsx (FINAL: ROBUST & ID-SAFE)
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import { useAuth } from '../hooks/useAuth.js'; 
+import { useAuth } from './AuthContext.jsx'; // Ensure path is correct
 
 export const SocketContext = createContext();
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080';
+// 1. Define URL (Safe Fallback)
+const WS_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 export const SocketProvider = ({ children }) => {
     const { isAuthenticated, user } = useAuth();
@@ -13,63 +14,65 @@ export const SocketProvider = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
-        // 1. Get Token immediately
+        // 2. Safe User ID Check (Handles _id vs id)
+        const userId = user?._id || user?.id;
         const accessToken = localStorage.getItem('accessToken');
 
-        // 2. CRITICAL CHECK: Do not connect if no token or no user
-        if (!isAuthenticated || !user || !accessToken) {
+        // Stop if not ready
+        if (!isAuthenticated || !userId || !accessToken) {
             if (socket) {
-                console.log("Disconnecting socket (No auth)...");
+                console.log("🔌 SOCKET: Disconnecting (Auth/User missing)...");
                 socket.disconnect();
                 setSocket(null);
             }
-            setIsConnected(false);
             return;
         }
 
-        console.log(`[Socket] Initializing connection for ${user.name}...`);
+        // Avoid reconnecting if we are already connected to the SAME user
+        if (socket && socket.connected) {
+            return; 
+        }
 
-        // 3. Initialize Socket with Token
+        console.log(`🔌 SOCKET: Connecting as ${user.name} (${userId})...`);
+
+        // 3. Initialize Socket
         const newSocket = io(WS_URL, {
-            auth: {
-                token: accessToken // Send the token here
-            },
-            query: {
-                userId: user.id,
-                userRole: user.role
-            },
-            transports: ['websocket'],
-            autoConnect: true
+            auth: { token: accessToken }, // Send token for auth
+            query: { userId: userId },    // Send ID for room targeting
+            transports: ['websocket'],    // Force fast connection
+            reconnection: true,           // Ensure it tries to come back if lost
+            reconnectionAttempts: 5,
         });
 
+        // 4. Listeners
         newSocket.on('connect', () => {
-            console.log('[Socket] Connected ✅ ID:', newSocket.id);
+            console.log('🟢 SOCKET CONNECTED! ID:', newSocket.id);
             setIsConnected(true);
         });
 
-        newSocket.on('disconnect', (reason) => {
-            console.log('[Socket] Disconnected ❌:', reason);
+        newSocket.on('connect_error', (err) => {
+            console.error('🔴 SOCKET ERROR:', err.message);
             setIsConnected(false);
         });
-        
-        newSocket.on('connect_error', (err) => {
-            console.error('[Socket] Connection Error ⚠️:', err.message);
+
+        newSocket.on('disconnect', (reason) => {
+            console.warn('🟡 SOCKET DISCONNECTED:', reason);
+            setIsConnected(false);
         });
 
         setSocket(newSocket);
 
+        // Cleanup
         return () => {
             newSocket.disconnect();
         };
-        
-    }, [isAuthenticated, user?.id]); // Re-run only if Auth changes
+
+    // 🛑 CRITICAL FIX: Depend on the correct ID field
+    }, [isAuthenticated, user?._id, user?.id]); 
 
     const value = {
         socket,
-        isConnected,
-        emit: (event, data) => socket?.emit(event, data),
-        on: (event, callback) => socket?.on(event, callback),
-        off: (event, callback) => socket?.off(event, callback),
+        isConnected
     };
 
     return (

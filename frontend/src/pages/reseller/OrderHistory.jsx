@@ -1,6 +1,7 @@
-// OrderHistory.jsx (ESM) - FULL RESTORED VERSION (No code removed)
+// src/pages/reseller/OrderHistory.jsx (FINAL: REAL-TIME ENABLED)
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api.js';
+import { useSocket } from '../../context/SocketContext.jsx'; // ⬅️ 1. IMPORT SOCKET
 import { 
     FaSyncAlt, FaTimesCircle, FaEye, FaTimes, 
     FaBox, FaMapMarkerAlt, FaShippingFast, FaUser 
@@ -15,7 +16,7 @@ const calculateTotalItems = (items) => {
 const StatusBadge = ({ status }) => {
     const styles = {
         'AWAITING PAYMENT': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        'PENDING VERIFICATION': 'bg-orange-100 text-orange-800 border-orange-200',
+        'PENDING VERIFICATION': 'bg-orange-100 text-orange-800 border-orange-200 animate-pulse',
         'PROCESSING': 'bg-blue-100 text-blue-800 border-blue-200',
         'SHIPPED': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'DELIVERED': 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -30,6 +31,7 @@ const StatusBadge = ({ status }) => {
 
 // --- MAIN COMPONENT ---
 const OrderHistory = () => {
+    const { socket } = useSocket(); // ⬅️ 2. HOOK INTO SOCKET
     const [orders, setOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     
@@ -38,32 +40,57 @@ const OrderHistory = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [cancelOrderId, setCancelOrderId] = useState(null); 
 
-    const fetchOrders = async () => {
-        setIsLoading(true);
+    // 3. UPDATED FETCH FUNCTION (With "Silent Mode")
+    const fetchOrders = async (isBackground = false) => {
+        if (!isBackground) setIsLoading(true); // Show spinner only if explicit
         try {
             const response = await api.get('/reseller/orders');
             setOrders(response.data.data);
+            
+            // Also update the selected order if it's currently open in a modal
+            if (isBackground && selectedOrder) {
+                const updatedSelected = response.data.data.find(o => o._id === selectedOrder._id);
+                if (updatedSelected) setSelectedOrder(updatedSelected);
+            }
         } catch (err) {
             console.error("Error fetching orders:", err);
         } finally {
-            setIsLoading(false);
+            if (!isBackground) setIsLoading(false);
         }
     };
 
+    // Initial Load
     useEffect(() => {
         fetchOrders();
     }, []);
+
+    // 4. ⚡ REAL-TIME LISTENER ⚡
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleOrderUpdate = (updatedOrder) => {
+            console.log("⚡ Order Update Received:", updatedOrder._id);
+            // We re-fetch silently to ensure we get the fresh data without spinning the whole screen
+            fetchOrders(true);
+        };
+
+        // Listen for the specific event we emitted in Admin Controller
+        socket.on('order_update', handleOrderUpdate);
+
+        return () => {
+            socket.off('order_update', handleOrderUpdate);
+        };
+    }, [socket, selectedOrder]); // Depend on selectedOrder so we can update the modal too
 
     // --- ACTIONS ---
     const executeCancel = async () => {
         if (!cancelOrderId) return;
         const orderId = cancelOrderId;
-        setCancelOrderId(null); // Close confirm modal
+        setCancelOrderId(null); 
 
         try {
             await api.put(`/reseller/orders/${orderId}/cancel`);
-            fetchOrders();
-            // If the details modal is open for this order, close it too
+            fetchOrders(true); // Refresh list
             if (selectedOrder?._id === orderId) setIsModalOpen(false);
         } catch (err) {
             alert('Cancellation failed. Order may already be processed.');
@@ -123,7 +150,7 @@ const OrderHistory = () => {
 
                         {/* 2. Tracking Info (Visible only if Shipped) */}
                         {isShipped && (
-                            <div className="mb-8 p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200">
+                            <div className="mb-8 p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700 text-indigo-900 dark:text-indigo-200 animate-fade-in">
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="p-2 bg-indigo-100 dark:bg-indigo-800 rounded-full">
                                         <FaShippingFast className="text-indigo-600 dark:text-indigo-300" />
@@ -262,7 +289,7 @@ const OrderHistory = () => {
                     <p className="text-gray-500 dark:text-gray-400 mt-1">Track and manage your purchases</p>
                 </div>
                 <button 
-                    onClick={fetchOrders} 
+                    onClick={() => fetchOrders(false)} 
                     disabled={isLoading} 
                     className="flex items-center gap-2 px-4 py-2 text-indigo-600 bg-white border border-indigo-100 rounded-xl shadow-sm hover:bg-indigo-50 hover:shadow-md transition disabled:opacity-50"
                 >

@@ -1,84 +1,74 @@
+// File B: backend/src/socket/socketHandler.js
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import Message from '../models/message.model.js';
 import ChatRoom from '../models/chatRoom.model.js';
 
 dotenv.config();
-const JWT_SECRET = process.env.JWT_SECRET;
 
-// 1. Export Middleware
+// Middleware
 export const socketAuthMiddleware = (socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) return next(); // Allow guest/initial connection
-
+    const token = socket.handshake.auth.token || socket.handshake.query.token;
+    if (!token) return next(new Error('Authentication error'));
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         socket.user = decoded;
         next();
     } catch (err) {
-        return next(new Error('Authentication error: Invalid token.'));
+        next(new Error('Authentication error'));
     }
 };
 
-// 2. Export Event Handlers
+// Handler
 export const initializeSocketHandlers = (io) => {
     io.use(socketAuthMiddleware);
 
     io.on('connection', (socket) => {
-        console.log(`Socket connected: ${socket.id}`);
+        const userId = socket.user.id;
+        console.log(`🔌 [Handler] User connected: ${userId}`);
 
-        // Join a conversation room
+        // 1. Join Room
         socket.on('join-room', (roomId) => {
-            socket.join(roomId);
-            console.log(`Socket ${socket.id} joined room ${roomId}`);
+            if (roomId) {
+                const roomStr = roomId.toString();
+                socket.join(roomStr);
+                console.log(`👤 [Handler] User joined: ${roomStr}`);
+            }
         });
 
-        // --- HANDLE SEND MESSAGE ---
-        socket.on('send-message', async ({ roomId, content, receiverId }) => {
+        // 2. Send Message
+        socket.on('send-message', async ({ roomId, content }) => {
             try {
-                const senderId = socket.user ? socket.user.id : null;
-                if (!senderId) return; // Guard clause
+                if (!roomId || !content) return;
+                const roomStr = roomId.toString();
 
-                // 1. Save to Database
+                // A. Save
                 const newMessage = await Message.create({
                     chatRoomId: roomId,
-                    senderId: senderId,
+                    senderId: userId,
                     content: content
                 });
 
-                // 2. Update ChatRoom "lastMessage" (for the list view preview)
+                // B. Update Room
                 await ChatRoom.findByIdAndUpdate(roomId, { 
-                    lastMessage: newMessage._id 
+                    lastMessage: newMessage._id, 
+                    updatedAt: new Date() 
                 });
 
-                // 3. Emit to real-time room (so they see it instantly)
-                io.to(roomId).emit('new-message', newMessage);
+                // C. Populate
+                await newMessage.populate('senderId', 'name email role pic');
                 
-                console.log(`Message saved & sent in ${roomId}`);
+                // D. Emit
+                io.to(roomStr).emit('new_message', newMessage);
+                console.log(`📨 [Handler] Sent to room ${roomStr}`);
 
             } catch (error) {
-                console.error("Message send error:", error);
+                console.error("Error:", error);
             }
         });
 
-        // --- HANDLE SEEN STATUS ---
-        socket.on('mark-seen', async ({ roomId }) => {
-            try {
-                const userId = socket.user?.id;
-                if (!userId) return;
-
-                // Update all messages in this room sent by the OTHER person to isRead: true
-                await Message.updateMany(
-                    { chatRoomId: roomId, senderId: { $ne: userId }, isRead: false },
-                    { $set: { isRead: true } }
-                );
-            } catch (error) {
-                console.error("Mark seen error:", error);
-            }
-        });
-
-        socket.on('disconnect', () => {
-            console.log('Socket disconnected');
+        socket.on('typing', ({ roomId, isTyping }) => {
+            if(roomId) socket.to(roomId.toString()).emit('typing', { senderId: userId, isTyping });
         });
     });
 };

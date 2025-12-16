@@ -1,38 +1,47 @@
 import { Router } from 'express';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js'; 
 import { multerUpload, uploadSingleImage } from '../middleware/upload.middleware.js';
-
-// 1. FIX: Import 'getProducts' (not getProductsController)
 import { getProducts } from '../controllers/product.controller.js';
-
-// 2. FIX: Ensure these match your actual Controller exports
-// Based on our previous work, these were likely in 'orderController.js'
-// If you moved them to 'reseller.controller.js', ensure the names match exactly.
 import { 
-    createOrder,            // Was placeOrder
+    createOrder, 
     getMyOrders, 
-    cancelOrderUser,        // Was cancelOrder
-    uploadPaymentProof      // Was uploadPaymentProofController
-} from '../controllers/orderController.js'; // Check if this file name is correct in your folder
+    cancelOrderUser, 
+    uploadPaymentProof 
+} from '../controllers/orderController.js'; 
 
 const router = Router();
-
-router.use(authenticateToken);
-router.use(requireRole(['reseller']));
 
 // --- ROUTES ---
 
 // Product Catalog
-router.get('/products', getProducts);
+router.get('/products', authenticateToken, requireRole(['reseller']), getProducts);
 
-// Orders
-router.post('/orders', createOrder); // Place Order
-router.get('/orders', getMyOrders);  // View History
-router.patch('/orders/:id/cancel', cancelOrderUser); // Cancel
+// 🛑 DEBUG MIDDLEWARE: Put this exactly here
+const debugRole = (req, res, next) => {
+    console.log("🕵️ DEBUG SPY:");
+    console.log("User ID:", req.user?._id || req.user?.id);
+    console.log("User Role:", req.user?.role); 
+    console.log("Required Role: reseller");
+    next();
+};
 
-// Upload Proof (With Middleware)
+// Orders (With Debug Spy)
+router.post(
+    '/orders', 
+    authenticateToken, 
+    debugRole, // <--- THE SPY IS HERE
+    requireRole(['reseller']), 
+    createOrder
+); 
+
+router.get('/orders', authenticateToken, getMyOrders); 
+router.patch('/orders/:id/cancel', authenticateToken, requireRole(['reseller']), cancelOrderUser);
+
+// Upload Proof
 router.patch(
     '/orders/:id/upload-proof', 
+    authenticateToken, 
+    requireRole(['reseller']), 
     multerUpload.single('proof'), 
     uploadSingleImage, 
     uploadPaymentProof

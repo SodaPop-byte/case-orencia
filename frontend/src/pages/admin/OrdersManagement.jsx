@@ -1,6 +1,7 @@
-// OrdersManagement.jsx (ESM) - FINAL FIX
+// OrdersManagement.jsx (FINAL: REAL-TIME ENABLED)
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api.js';
+import { useSocket } from '../../context/SocketContext.jsx'; // ⬅️ 1. IMPORT SOCKET
 import { 
     FaCheckCircle, FaTimesCircle, FaEye, FaSyncAlt, 
     FaBoxOpen, FaExclamationTriangle, FaTimes, FaMapMarkerAlt, FaUser, FaList, FaShippingFast, FaTruckLoading, FaPrint
@@ -16,7 +17,7 @@ const StatusBadge = ({ status }) => {
     if (!status) return <span className="text-gray-400 text-xs">Unknown</span>;
     const styles = {
         'AWAITING PAYMENT': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-        'PENDING VERIFICATION': 'bg-orange-100 text-orange-800 border-orange-200',
+        'PENDING VERIFICATION': 'bg-orange-100 text-orange-800 border-orange-200 animate-pulse', // Added pulse
         'PROCESSING': 'bg-blue-100 text-blue-800 border-blue-200',
         'SHIPPED': 'bg-indigo-100 text-indigo-800 border-indigo-200',
         'DELIVERED': 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -30,6 +31,7 @@ const StatusBadge = ({ status }) => {
 };
 
 const OrdersManagement = () => {
+    const { socket } = useSocket(); // ⬅️ 2. HOOK INTO SOCKET
     const [orders, setOrders] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -47,7 +49,10 @@ const OrdersManagement = () => {
     });
 
     const fetchOrders = async () => {
-        setIsLoading(true);
+        // Only set loading on initial fetch or manual refresh, not on auto-updates
+        // We handle this loosely here, but mostly we want to avoid screen flicker
+        // setIsLoading(true); <--- Optional: Comment out to prevent flicker on socket update
+        
         setError('');
         try {
             const statusQuery = currentStatusFilter ? `?status=${currentStatusFilter}` : '';
@@ -57,13 +62,34 @@ const OrdersManagement = () => {
             console.error("Fetch Error:", err);
             setError('Failed to fetch orders.');
         } finally {
-            setIsLoading(false);
+            // setIsLoading(false);
         }
     };
 
+    // Initial Load
     useEffect(() => {
-        fetchOrders();
+        setIsLoading(true);
+        fetchOrders().then(() => setIsLoading(false));
     }, [currentStatusFilter]);
+
+    // ⚡ 3. REAL-TIME LISTENER (THE MAGIC FIX) ⚡
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleOrderUpdate = (data) => {
+            // If the notification is about an Order, REFRESH THE TABLE
+            if (data.type === 'NEW_ORDER' || data.type === 'PAYMENT_PROOF' || data.type === 'ORDER_UPDATE') {
+                console.log("⚡ Real-time Order Update Detected. Refreshing list...");
+                fetchOrders(); // <--- Auto-refresh without page reload
+            }
+        };
+
+        socket.on('notification', handleOrderUpdate);
+        
+        return () => {
+            socket.off('notification', handleOrderUpdate);
+        };
+    }, [socket, currentStatusFilter]); 
 
     // --- ACTIONS ---
     const initiateStatusUpdate = (orderId, newStatus) => {
@@ -104,7 +130,7 @@ const OrdersManagement = () => {
         }
     };
     
-    // NEW FUNCTION: EXECUTES SHIPPED STATUS (with tracking)
+    // EXECUTES SHIPPED STATUS (with tracking)
     const executeShipment = async (orderId, trackingNumber) => {
         if (!trackingNumber) {
             alert('Tracking number is required.');
@@ -146,11 +172,10 @@ const OrdersManagement = () => {
         return items.reduce((acc, item) => acc + (item.quantity || 0), 0);
     };
 
-    // --- MODAL: ORDER DETAILS (ULTRA SAFE) ---
+    // --- MODAL: ORDER DETAILS ---
     const OrderDetailModal = () => {
         if (!isDetailModalOpen || !selectedOrder) return null;
 
-        // NEW: Local state for tracking number input
         const [trackingInput, setTrackingInput] = useState(selectedOrder.trackingNumber || '');
         const isReadyToShip = selectedOrder.status === 'PROCESSING';
         const isShipped = selectedOrder.status === 'SHIPPED';
@@ -213,7 +238,6 @@ const OrdersManagement = () => {
                                         <FaShippingFast /> Tracking Number
                                     </h5>
                                     {isReadyToShip || isShipped ? (
-                                        // TRACKING INPUT FORM (Only appears if ready to ship or if shipped)
                                         <form onSubmit={(e) => { e.preventDefault(); executeShipment(selectedOrder._id, trackingInput); }}>
                                             <input 
                                                 type="text" 
@@ -221,7 +245,7 @@ const OrdersManagement = () => {
                                                 onChange={e => setTrackingInput(e.target.value)}
                                                 className="input-field w-full p-2 border rounded"
                                                 placeholder="Enter Tracking Number"
-                                                disabled={isShipped} // Disable if already shipped
+                                                disabled={isShipped}
                                                 required
                                             />
                                             {isReadyToShip && (
@@ -232,7 +256,6 @@ const OrdersManagement = () => {
                                             {isShipped && <p className="text-sm font-mono text-indigo-700 mt-2">Shipped on: {selectedOrder.shippingDate ? new Date(selectedOrder.shippingDate).toLocaleDateString() : 'Date N/A'}</p>}
                                         </form>
                                     ) : (
-                                        // Default Display
                                         <p className="font-mono text-sm break-all text-gray-500">
                                             Not ready for shipment input.
                                         </p>
@@ -282,7 +305,6 @@ const OrdersManagement = () => {
                     
                     {/* FOOTER ACTIONS */}
                     <div className="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 flex justify-between items-center">
-                        {/* Print Invoice Button - LEFT ALIGNED */}
                         <button 
                             onClick={() => window.open(`/admin/invoice/${selectedOrder._id}`, '_blank')}
                             className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 font-bold text-sm shadow-sm"
@@ -299,7 +321,6 @@ const OrdersManagement = () => {
                                 </button>
                             )}
                             
-                            {/* Finalization Button */}
                             {selectedOrder.status === 'SHIPPED' && (
                                 <button onClick={() => initiateStatusUpdate(selectedOrder._id, 'DELIVERED')} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-bold">
                                     Mark Delivered

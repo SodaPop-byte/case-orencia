@@ -1,7 +1,9 @@
-// App.jsx (ESM) - FINAL CORRECTED VERSION
+// src/App.jsx (FULL RESTORED VERSION)
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth.js';
+
+// 🛑 KEEP THIS FIX: Import from context
+import { useAuth } from './context/AuthContext.jsx'; 
 
 // --- AUTH & COMMON PAGES ---
 import Login from './pages/Login.jsx';
@@ -19,7 +21,7 @@ import OrdersManagement from './pages/admin/OrdersManagement.jsx';
 import ReportsPage from './pages/admin/ReportsPage.jsx'; 
 import InventoryTracking from './pages/admin/InventoryTracking.jsx'; 
 import SiteSettings from './pages/admin/SiteSettings.jsx';
-import Invoice from './pages/admin/Invoice.jsx'; // Invoice Page
+import Invoice from './pages/admin/Invoice.jsx';
 
 // --- RESELLER PAGES ---
 import ProductCatalog from './pages/reseller/ProductCatalog.jsx'; 
@@ -27,11 +29,7 @@ import ProductDetails from './pages/reseller/ProductDetails.jsx';
 import OrderHistory from './pages/reseller/OrderHistory.jsx';
 import CheckoutPage from './pages/reseller/CheckoutPage.jsx';
 
-
-// ====================================================================
-// PRIVATE ROUTE COMPONENT
-// ====================================================================
-
+// --- PRIVATE ROUTE COMPONENT ---
 const PrivateRoute = ({ element: Element, allowedRoles, ...rest }) => {
     const { isAuthenticated, user, isLoading } = useAuth();
     if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading...</div>; 
@@ -39,11 +37,6 @@ const PrivateRoute = ({ element: Element, allowedRoles, ...rest }) => {
     if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />; 
     return <Element {...rest} />;
 };
-
-
-// ====================================================================
-// MAIN APPLICATION ROUTES
-// ====================================================================
 
 const App = () => {
     return (
@@ -65,10 +58,7 @@ const App = () => {
                 <Route path="orders" element={<OrdersManagement />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="settings" element={<SiteSettings />} />
-                
-                {/* NEW: Invoice Route (Added correctly) */}
                 <Route path="invoice/:id" element={<Invoice />} />
-
                 <Route path="" element={<Navigate to="dashboard" replace />} /> 
             </Route>
 
@@ -80,7 +70,7 @@ const App = () => {
                 <Route path="" element={<Navigate to="catalog" replace />} />
             </Route>
             
-            <Route path="*" element={<div className="p-10 text-center">404 Not Found</div>} />
+            <Route path="*" element={<div className="p-10 text-center text-gray-500">404 Not Found</div>} />
         </Routes>
     );
 };

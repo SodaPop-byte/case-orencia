@@ -1,4 +1,4 @@
-// CheckoutPage.jsx (ESM) - SPLIT CONTACT INFO & PHP FIX
+// CheckoutPage.jsx (ESM) - FIXED: FORCE TOKEN INJECTION
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api.js';
@@ -20,7 +20,7 @@ const CheckoutPage = () => {
     // SPLIT CONTACT FIELDS
     const [addressData, setAddressData] = useState({ 
         street: '', city: '', zipCode: '', 
-        contactName: '', contactNumber: '' // Split fields
+        contactName: '', contactNumber: '' 
     });
     const [proofFile, setProofFile] = useState(null);
     const [proofUploadStatus, setProofUploadStatus] = useState('');
@@ -29,7 +29,7 @@ const CheckoutPage = () => {
         const fetchSettings = async () => {
             try {
                 const res = await api.get('/content/landing');
-                setSettings(res.data.data);
+                setSettings(res.data.data || {});
             } catch (err) {
                 console.error("Failed to load settings", err);
             } finally {
@@ -45,7 +45,9 @@ const CheckoutPage = () => {
         }
     }, [totalItems, orderSubmitted, isLoadingSettings, navigate]);
 
-    const grandTotal = totalPrice + (settings.shippingFee || 0);
+    // Safety check for totalPrice and shippingFee
+    const safeShippingFee = settings.shippingFee || 0;
+    const grandTotal = totalPrice + safeShippingFee;
 
     const handleAddressChange = (e) => {
         const { name, value } = e.target;
@@ -57,8 +59,8 @@ const CheckoutPage = () => {
         setError('');
         setIsLoading(true);
 
-        // VALIDATION: Phone Number
-        const phoneRegex = /^[0-9]{10,12}$/; // Basic check for 10-12 digits
+        // 1. VALIDATION: Phone Number
+        const phoneRegex = /^[0-9]{10,12}$/;
         if (!phoneRegex.test(addressData.contactNumber.replace(/\D/g, ''))) {
             setError('Please enter a valid contact number (e.g., 09171234567).');
             setIsLoading(false);
@@ -66,30 +68,48 @@ const CheckoutPage = () => {
         }
 
         const itemsData = cartItems.map(item => ({
-            productId: item.productId,
+            productId: item.productId || item._id, // Handle both ID formats
             quantity: item.quantity,
         }));
         
-        // Combine Name and Number into one string for backend storage (to avoid schema change)
-        // OR create a formatted string. The backend expects 'contactInfo'.
         const combinedContact = `${addressData.contactName} (${addressData.contactNumber})`;
 
+        // 🛑 CRITICAL FIX: MANUALLY GRAB TOKEN 🛑
+        const token = localStorage.getItem('accessToken');
+        
+        if (!token) {
+            setError("You appear to be logged out. Please login again.");
+            setIsLoading(false);
+            return;
+        }
+
         try {
+            // 🛑 FORCE ATTACH TOKEN TO HEADERS 🛑
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` // <--- THIS FIXES THE ERROR
+                }
+            };
+            
             const response = await api.post('/reseller/orders', {
                 items: itemsData,
                 shippingAddress: { 
                     street: addressData.street,
                     city: addressData.city,
                     zipCode: addressData.zipCode,
-                    contactInfo: combinedContact, // Sending combined string
-                    shippingFee: settings.shippingFee 
-                }
-            });
+                    contactInfo: combinedContact,
+                },
+                shippingFee: safeShippingFee,
+            }, config);
+
             setSuccessMessage('Order placed! Please upload proof of payment.');
             setOrderSubmitted(response.data.data);
             clearCart(); 
         } catch (err) {
-            setError(err.response?.data?.message || 'Order failed.');
+            console.error("Order Error:", err.response || err);
+            const msg = err.response?.data?.message || 'Order failed. Please try again.';
+            setError(msg);
         } finally {
             setIsLoading(false);
         }
@@ -101,16 +121,25 @@ const CheckoutPage = () => {
         
         const formData = new FormData();
         formData.append('proof', proofFile); 
+        
+        // 🛑 CRITICAL FIX: MANUALLY GRAB TOKEN FOR UPLOAD TOO 🛑
+        const token = localStorage.getItem('accessToken');
 
         try {
             await api.patch(`/reseller/orders/${orderSubmitted._id}/upload-proof`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
+                headers: { 
+                    'Content-Type': 'multipart/form-data',
+                    'Authorization': `Bearer ${token}` // <--- FORCE TOKEN HERE TOO
+                },
             });
+            
             setProofUploadStatus('Upload Complete!');
             setSuccessMessage('Proof uploaded. Check your history for updates.');
             setTimeout(() => navigate('/reseller/orders'), 3000); 
         } catch (err) {
             setProofUploadStatus('Upload Failed.');
+            console.error(err);
+            setError("Failed to upload proof. Please try again from Order History.");
         }
     };
 
@@ -169,7 +198,6 @@ const CheckoutPage = () => {
                 <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <h2 className="text-2xl font-bold mb-6 dark:text-white">Shipping Details</h2>
                     <form id="checkout-form" onSubmit={handleOrderSubmission} className="space-y-5">
-                        {/* SPLIT FIELDS */}
                         <div className="grid grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contact Name</label>
@@ -206,7 +234,7 @@ const CheckoutPage = () => {
                     
                     <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                         {cartItems.map(item => (
-                            <div key={item.productId} className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                            <div key={item.productId || item._id} className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
                                         <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
@@ -219,7 +247,7 @@ const CheckoutPage = () => {
                                 <div className="flex items-center gap-4">
                                     <span className="text-sm font-semibold text-gray-900 dark:text-white">₱{(item.price * item.quantity).toFixed(2)}</span>
                                     <button 
-                                        onClick={() => removeFromCart(item.productId)}
+                                        onClick={() => removeFromCart(item.productId || item._id)}
                                         className="text-gray-400 hover:text-red-500 transition p-1"
                                         title="Remove item"
                                     >
@@ -237,7 +265,7 @@ const CheckoutPage = () => {
                         </div>
                         <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
                             <span>Shipping Fee</span>
-                            <span>₱{(settings.shippingFee || 0).toFixed(2)}</span>
+                            <span>₱{safeShippingFee.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between text-xl font-extrabold text-gray-900 dark:text-white pt-2">
                             <span>Total</span>

@@ -1,9 +1,9 @@
-// AdminDashboard.jsx (ESM) - CLEAN ANALYTICS ONLY (No Buttons)
+// src/pages/admin/AdminDashboard.jsx (FINAL: CLEAN ANALYTICS)
 import React, { useState, useEffect } from 'react';
 import api from '../../utils/api.js';
 import { 
     FaWallet, FaShoppingCart, FaBoxOpen, FaExclamationTriangle, 
-    FaArrowUp, FaClock 
+    FaArrowUp 
 } from 'react-icons/fa';
 import { 
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,6 +16,7 @@ const AdminDashboard = () => {
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    // eslint-disable-next-line no-unused-vars
     const [error, setError] = useState('');
 
     const COLORS = ['#6366f1', '#ec4899', '#8b5cf6', '#10b981'];
@@ -46,12 +47,19 @@ const AdminDashboard = () => {
                         salesMap[date] = (salesMap[date] || 0) + order.totalPrice;
                     }
                 });
-                const salesChartData = Object.keys(salesMap).map(date => ({ name: date, sales: salesMap[date] })).reverse().slice(-7);
+                // Take last 7 days or entries
+                const salesChartData = Object.keys(salesMap)
+                    .map(date => ({ name: date, sales: salesMap[date] }))
+                    .reverse() // Assuming API returns newest first, we want chronological for chart? Actually API sort depends.
+                    // Usually map/reduce approach above loses order unless keys sorted. 
+                    // Let's rely on standard object key order or sort by date if needed.
+                    // For now, slicing the last 7 entries:
+                    .slice(-7);
 
                 const categoryData = inventory.map(item => ({
                     name: item.itemName.charAt(0).toUpperCase() + item.itemName.slice(1),
                     value: item.stockLevel
-                }));
+                })).slice(0, 5); // Limit pie slices to avoid clutter
 
                 setStats({ revenue: totalRevenue, orders: allOrders.length, products: activeProducts, lowStock: lowStockCount });
                 setRecentOrders(allOrders.slice(0, 5));
@@ -85,8 +93,12 @@ const AdminDashboard = () => {
 
     const StatusBadge = ({ status }) => {
         const colors = {
-            'PROCESSING': 'bg-blue-100 text-blue-700', 'DELIVERED': 'bg-emerald-100 text-emerald-700',
-            'CANCELLED': 'bg-red-100 text-red-700', 'AWAITING PAYMENT': 'bg-yellow-100 text-yellow-800'
+            'PROCESSING': 'bg-blue-100 text-blue-700', 
+            'DELIVERED': 'bg-emerald-100 text-emerald-700',
+            'CANCELLED': 'bg-red-100 text-red-700', 
+            'AWAITING PAYMENT': 'bg-yellow-100 text-yellow-800',
+            'PENDING VERIFICATION': 'bg-orange-100 text-orange-800',
+            'SHIPPED': 'bg-indigo-100 text-indigo-800'
         };
         return <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${colors[status] || 'bg-gray-100 text-gray-600'}`}>{status.replace('_', ' ')}</span>;
     };
@@ -94,7 +106,7 @@ const AdminDashboard = () => {
     if (isLoading) return <div className="min-h-screen flex items-center justify-center text-gray-500">Loading Dashboard...</div>;
 
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
+        <div className="max-w-7xl mx-auto space-y-8 animate-fade-in">
             {/* Header - Clean, No Buttons */}
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard Overview</h1>
@@ -110,11 +122,13 @@ const AdminDashboard = () => {
 
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* SALES TREND CHART */}
                 <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Sales Trend</h3>
                     <div className="h-72 w-full">
                         {chartData.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
+                            // Using 99% width prevents the Recharts resize loop error
+                            <ResponsiveContainer width="99%" height="100%">
                                 <AreaChart data={chartData}>
                                     <defs>
                                         <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
@@ -133,10 +147,11 @@ const AdminDashboard = () => {
                     </div>
                 </div>
 
+                {/* INVENTORY PIE CHART */}
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-6">Inventory By Type</h3>
                     <div className="h-72 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="99%" height="100%">
                             <PieChart>
                                 <Pie data={pieData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                     {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
@@ -149,7 +164,7 @@ const AdminDashboard = () => {
                 </div>
             </div>
 
-            {/* Recent Activity */}
+            {/* Recent Activity Table */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
                     <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
@@ -162,7 +177,7 @@ const AdminDashboard = () => {
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                                 {recentOrders.map(order => (
-                                    <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <tr key={order._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                                         <td className="px-6 py-4 font-medium">#{order._id.slice(-6).toUpperCase()}</td>
                                         <td className="px-6 py-4">{order.resellerId?.name || 'Unknown'}</td>
                                         <td className="px-6 py-4">₱{order.totalPrice.toFixed(2)}</td>
@@ -175,6 +190,7 @@ const AdminDashboard = () => {
                     </div>
                 </div>
 
+                {/* System Status Indicators */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
                     <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-4">System Status</h3>
                     <div className="space-y-4">

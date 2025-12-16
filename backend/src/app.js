@@ -1,4 +1,4 @@
-// app.js (ESM) - FINAL CORS FIX
+// src/app.js
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -24,6 +24,9 @@ import chatRoutes from './routes/chat.routes.js';
 import contentRoutes from './routes/content.routes.js';
 import publicRoutes from './routes/public.routes.js'; 
 
+// ✅ ADD THIS IMPORT
+import productRoutes from './routes/product.routes.js'; 
+
 const app = express();
 
 // ------------------------------------------------------------------
@@ -37,22 +40,19 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser()); 
 
 // --- CORS CONFIGURATION ---
-// We define this variable EXACTLY ONCE here
 const allowedOrigins = [
-    "http://localhost:5173",                  // Local Development
-    "https://case-orencia.vercel.app",        // Live Production
-    process.env.FRONTEND_URL                  // Fallback from Env Var
+    "http://localhost:5173",                  
+    "https://case-orencia.vercel.app",        
+    process.env.FRONTEND_URL                  
 ];
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            console.log("Blocked by CORS:", origin); // Debugging log
+            console.log("Blocked by CORS:", origin); 
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -73,6 +73,10 @@ app.get('/', (req, res) => {
 
 app.use('/api/v1/auth', authRoutes);     
 app.use('/api/v1/public', publicRoutes); 
+
+// ✅ ADD THIS LINE (This fixes the 404 on the catalog)
+app.use('/api/v1/products', productRoutes);
+
 app.use('/api/v1/admin', adminRoutes);   
 app.use('/api/v1/reseller', resellerRoutes); 
 app.use('/api/v1/chat', chatRoutes);     

@@ -1,37 +1,38 @@
-const express = require('express');
-const router = express.Router();
-const { protect } = require('../middleware/authMiddleware');
-
-// Import the middleware
-// Ensure your upload.middleware.js is exporting correctly for 'require'
-const { multerUpload, uploadSingleImage } = require('../middleware/upload.middleware'); 
-
-const { 
+// backend/src/routes/order.routes.js (FINAL ESM VERSION)
+import express from 'express';
+import { authenticateToken } from '../middleware/auth.js'; 
+import { multerUpload, uploadSingleImage } from '../middleware/upload.middleware.js'; 
+import { 
+    createOrder, // ⬅️ THIS was missing, preventing the order from being created
     getMyOrders, 
     markOrderDeliveredByUser, 
-    uploadPaymentProof, // <--- The function we just fixed
+    uploadPaymentProof, 
     cancelOrderUser 
-} = require('../controllers/orderController');
+} from '../controllers/orderController.js';
+
+const router = express.Router();
 
 // --- RESELLER ROUTES ---
 
+// 🛑 THE MISSING FIX: Receives the checkout request safely
+router.post('/', authenticateToken, createOrder);
+
 // Get my orders
-router.get('/my-orders', protect, getMyOrders);
+router.get('/my-orders', authenticateToken, getMyOrders);
 
 // Mark as received
-router.patch('/:id/receive', protect, markOrderDeliveredByUser);
+router.patch('/:id/receive', authenticateToken, markOrderDeliveredByUser);
 
 // Cancel Order
-router.patch('/:id/cancel', protect, cancelOrderUser);
+router.patch('/:id/cancel', authenticateToken, cancelOrderUser);
 
 // Upload Proof of Payment
-// Chain: Protect -> Multer (Parse File) -> Cloudinary (Get URL) -> Controller (Save DB)
 router.put(
   '/:id/pay', 
-  protect, 
-  multerUpload.single('proofImage'), // Must match Frontend FormData key
+  authenticateToken, 
+  multerUpload.single('proofImage'), 
   uploadSingleImage, 
   uploadPaymentProof
 );
 
-module.exports = router;
+export default router;
