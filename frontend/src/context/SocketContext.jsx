@@ -1,12 +1,12 @@
-// src/context/SocketContext.jsx (FINAL: ROBUST & ID-SAFE)
+// src/context/SocketContext.jsx (FINAL: FIXED AUTH & HELPERS)
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import { useAuth } from './AuthContext.jsx'; // Ensure path is correct
+import { useAuth } from './AuthContext.jsx'; 
 
 export const SocketContext = createContext();
 
-// 1. Define URL (Safe Fallback)
-const WS_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+// 1. Define URL (Prioritize WS_URL for root connection)
+const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:8080';
 
 export const SocketProvider = ({ children }) => {
     const { isAuthenticated, user } = useAuth();
@@ -14,9 +14,11 @@ export const SocketProvider = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
 
     useEffect(() => {
-        // 2. Safe User ID Check (Handles _id vs id)
+        // 2. Safe User ID & Token Check
         const userId = user?._id || user?.id;
-        const accessToken = localStorage.getItem('accessToken');
+        
+        // 🔴 FIX: Check BOTH common names for the token
+        const accessToken = localStorage.getItem('token') || localStorage.getItem('accessToken');
 
         // Stop if not ready
         if (!isAuthenticated || !userId || !accessToken) {
@@ -28,19 +30,19 @@ export const SocketProvider = ({ children }) => {
             return;
         }
 
-        // Avoid reconnecting if we are already connected to the SAME user
+        // Avoid reconnecting if already connected to the SAME user
         if (socket && socket.connected) {
             return; 
         }
 
-        console.log(`🔌 SOCKET: Connecting as ${user.name} (${userId})...`);
+        console.log(`🔌 SOCKET: Connecting to ${WS_URL} as ${user.name || 'User'}...`);
 
         // 3. Initialize Socket
         const newSocket = io(WS_URL, {
-            auth: { token: accessToken }, // Send token for auth
-            query: { userId: userId },    // Send ID for room targeting
+            auth: { token: accessToken }, // Handshake Auth
+            query: { userId: userId, token: accessToken }, // Query Param Backup
             transports: ['websocket'],    // Force fast connection
-            reconnection: true,           // Ensure it tries to come back if lost
+            reconnection: true,           
             reconnectionAttempts: 5,
         });
 
@@ -48,6 +50,9 @@ export const SocketProvider = ({ children }) => {
         newSocket.on('connect', () => {
             console.log('🟢 SOCKET CONNECTED! ID:', newSocket.id);
             setIsConnected(true);
+            
+            // Join specific user room for notifications
+            newSocket.emit('join-room', userId);
         });
 
         newSocket.on('connect_error', (err) => {
@@ -67,12 +72,27 @@ export const SocketProvider = ({ children }) => {
             newSocket.disconnect();
         };
 
-    // 🛑 CRITICAL FIX: Depend on the correct ID field
     }, [isAuthenticated, user?._id, user?.id]); 
 
+    // 5. Restore Helper Functions (ChatRoom needs these!)
+    const emit = (eventName, data) => {
+        if (socket) socket.emit(eventName, data);
+    };
+
+    const on = (eventName, callback) => {
+        if (socket) socket.on(eventName, callback);
+    };
+
+    const off = (eventName, callback) => {
+        if (socket) socket.off(eventName, callback);
+    };
+
     const value = {
-        socket,
-        isConnected
+        socket, 
+        isConnected,
+        emit, // <--- Added back
+        on,   // <--- Added back
+        off   // <--- Added back
     };
 
     return (
