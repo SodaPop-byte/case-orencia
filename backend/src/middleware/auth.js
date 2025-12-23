@@ -1,7 +1,7 @@
 // backend/middleware/auth.js
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import User from '../models/user.model.js'; // 🛑 IMPORT USER MODEL
+import User from '../models/User.js'; // 🛑 IMPORT USER MODEL
 
 dotenv.config();
 

@@ -1,5 +1,5 @@
 // auth.service.js (ESM) - FINAL AUTH FIX: SELECT PASSWORD
-import User from '../models/user.model.js';
+import User from '../models/User.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';

@@ -1,6 +1,6 @@
 import * as chatService from '../services/chat.service.js';
 import ChatRoom from '../models/chatRoom.model.js';
-import User from '../models/user.model.js';
+import User from '../models/User.js';
 
 // 1. Find or Create a Room
 export const findOrCreateRoom = async (req, res) => {

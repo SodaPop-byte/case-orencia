@@ -18,7 +18,7 @@ const OrderSchema = new mongoose.Schema({
     resellerId: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,
-        ref: 'User', // Must be 'User' (Capital U), matching user.model.js
+        ref: 'User', // Must be 'User' (Capital U), matching User.js
         index: true
     },
     // -----------------------------------------------------------------------

@@ -1,6 +1,5 @@
-// user.model.js (ESM) - FINAL SECURITY CHECK (Password Hashing Hook)
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs'; // ⚠️ I recommend 'bcryptjs' to avoid Windows build errors
 
 const userSchema = new mongoose.Schema({
     name: {
@@ -15,7 +14,6 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true,
     },
-    // CRITICAL: The field name must be 'password' for the pre-save hook to fire
     password: { 
         type: String,
         required: [true, 'Password is required.'],
@@ -23,12 +21,12 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['admin', 'reseller', 'staff'],
+        enum: ['admin', 'reseller', 'staff', 'user'],
         default: 'reseller'
     },
     isVerified: {
         type: Boolean,
-        default: true // Simplified for MVP/deployment
+        default: true 
     },
     dateJoined: {
         type: Date,
@@ -42,11 +40,9 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-
-// --- CRITICAL FUNCTION: Password Hashing ---
-// This pre-save hook hashes the password before saving to the database
+// Password Hashing Middleware
 userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) { // Only hash if password field is being changed
+    if (!this.isModified('password')) { 
         return next();
     }
     try {
@@ -54,11 +50,11 @@ userSchema.pre('save', async function (next) {
         this.password = await bcrypt.hash(this.password, salt);
         next();
     } catch (error) {
-        next(error); // Pass error to Mongoose
+        next(error); 
     }
 });
 
-// Instance method to compare password during login
+// Compare Password Method
 userSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };

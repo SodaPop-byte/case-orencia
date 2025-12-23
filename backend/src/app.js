@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // --- Load Models ---
-import './models/user.model.js'; 
+import './models/User.js'; 
 import './models/order.model.js'; 
 import './models/product.model.js'; 
 import './models/banner.model.js'; 

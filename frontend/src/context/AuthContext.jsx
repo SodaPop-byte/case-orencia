@@ -1,6 +1,5 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../utils/api.js'; 
+import api from '../utils/api.js';
 
 export const AuthContext = createContext();
 
@@ -9,68 +8,83 @@ export const AuthProvider = ({ children }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-    // Initialize Auth State
+    // 1. Initialize (Check if already logged in)
     useEffect(() => {
-        const initAuth = async () => {
-            const token = localStorage.getItem('accessToken');
-            const savedUser = localStorage.getItem('user');
-            
-            // Check if token is the literal string "undefined" (common bug)
-            if (token && token !== "undefined" && savedUser) {
-                try {
-                    setUser(JSON.parse(savedUser));
-                    setIsAuthenticated(true);
-                } catch (e) {
-                    console.error("Auth parsing error", e);
-                    localStorage.clear();
-                }
+        const token = localStorage.getItem('accessToken');
+        const savedUser = localStorage.getItem('user');
+
+        if (token && savedUser && token !== "undefined") {
+            try {
+                setUser(JSON.parse(savedUser));
+                setIsAuthenticated(true);
+            } catch (e) {
+                localStorage.clear();
             }
-            setIsLoading(false);
-        };
-        initAuth();
+        }
+        setIsLoading(false);
     }, []);
 
+    // 2. Login Function (The Fix)
     const login = async (email, password) => {
         try {
             const res = await api.post('/auth/login', { email, password });
             
-            console.log("🔍 LOGIN RESPONSE:", res.data); // Debug Log
+            // 🔍 DEBUG: Check what came back
+            console.log("LOGIN RESPONSE:", res.data);
 
-            if (res.data.success || res.status === 200) {
-                // 🛑 FIXED: SMART TOKEN HUNTING 🛑
-                // We look in multiple places to avoid "undefined" errors
-                const token = res.data.token || res.data.accessToken || res.data.data?.token || res.data.data?.accessToken;
-                const user = res.data.user || res.data.data?.user;
+            if (res.data.success) {
+                // 🟢 EXTRACT DATA CORRECTLY
+                // Based on controller: { data: { user, accessToken } }
+                const token = res.data.data?.accessToken; 
+                const userData = res.data.data?.user;
 
                 if (!token) {
-                    console.error("❌ TOKEN MISSING IN RESPONSE. Server sent:", res.data);
-                    return { success: false, message: "Login failed: Server did not provide a token." };
+                    console.error("❌ Token missing in response:", res.data);
+                    return { success: false, message: "Login failed: No token received." };
                 }
 
-                // Save VALID data only
+                // Save
                 localStorage.setItem('accessToken', token);
-                localStorage.setItem('user', JSON.stringify(user));
+                localStorage.setItem('user', JSON.stringify(userData));
                 
-                setUser(user);
+                // Update State
+                setUser(userData);
                 setIsAuthenticated(true);
-                return { success: true, user };
+
+                return { success: true, user: userData };
             }
             return { success: false, message: res.data.message };
+
         } catch (error) {
-            console.error("Login Error:", error);
-            return { success: false, message: error.response?.data?.message || 'Login failed' };
+            console.error("Login Request Failed:", error);
+            const msg = error.response?.data?.message || 'Server error during login';
+            return { success: false, message: msg };
         }
     };
 
+    // 3. Register Function (With OTP support)
+    const register = async (name, email, password, otp) => {
+        try {
+            const res = await api.post('/auth/register', { name, email, password, otp });
+            if (res.data.success) {
+                return { success: true, message: 'Registration successful!' };
+            }
+            return { success: false, message: res.data.message };
+        } catch (error) {
+            return { success: false, message: error.response?.data?.message || 'Registration failed' };
+        }
+    };
+
+    // 4. Logout
     const logout = () => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('user');
         setUser(null);
         setIsAuthenticated(false);
-        window.location.href = '/login'; 
+        window.location.href = '/login';
     };
 
-    const value = { user, isAuthenticated, isLoading, login, logout };
+    const value = { user, isAuthenticated, isLoading, login, logout, register };
 
     return (
         <AuthContext.Provider value={value}>
@@ -81,8 +95,6 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error("useAuth must be used within an AuthProvider");
-    }
+    if (!context) throw new Error("useAuth must be used within AuthProvider");
     return context;
 };

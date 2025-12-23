@@ -3,7 +3,7 @@ import * as orderService from '../services/order.service.js';
 import * as reportService from '../services/report.service.js';
 import * as authService from '../services/auth.service.js';
 import Order from '../models/order.model.js';
-import User from '../models/user.model.js'; 
+import User from '../models/User.js'; 
 import Notification from '../models/notification.model.js'; // ⬅️ Critical Import
 import { z } from 'zod';
 
